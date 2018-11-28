@@ -1,5 +1,5 @@
 {
-  "name": "osjs-hardware-serviceprovider",
+  "name": "osjs-hardware-provider",
   "version": "1.0.0",
   "description": "A service provider that adds hardware acces.",
   "main": "index.js",
