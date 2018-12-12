@@ -1,16 +1,16 @@
 {
   "name": "osjs-hardware-provider",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A service provider that adds hardware acces.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
-  	"osjs",
-  	"os.js",
-  	"provider",
-  	"hardware"
+    "osjs",
+    "os.js",
+    "provider",
+    "hardware"
   ],
   "repository": {
     "type": "git",
@@ -23,6 +23,8 @@
   },
   "homepage": "https://github.com/SpaceboyRoss01/OS.js-hardware-serviceprovider#readme",
   "dependencies": {
+    "@osjs/event-emitter": "^1.0.4",
+    "paclient": "0.0.2",
     "systeminformation": "^3.51.3"
   },
   "optionalDependencies": {}
