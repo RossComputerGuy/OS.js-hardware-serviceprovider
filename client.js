@@ -24,12 +24,8 @@ class ServiceProvider {
 			const promise = this.core.request(this.core.url('hardware/'+name),{},'json');
 			return callbackWrapper(promise,cb);
 		};
-		const audioEvents = new EventEmitter();
-		const audioEventsSocket = new WebSocket(window.location.protocol.replace('http','ws')+'/'+window.location.hostname+':'+window.location.port+this.core.url('/hardware/audio/events'));
-		audioEventsSocket.onmessage = ev => audioEvents.emit(JSON.parse(ev.data).name,...JSON.parse(ev.data).arguments);
 		this.core.singleton('hw',() => ({
 		  audio: {
-		    events: audioEvents,
 		    getCards: cb => req('audio/getCards',cb),
 		    getClients: cb => req('audio/getClients',cb),
 		    getModules: cb => req('audio/getModules',cb),
@@ -55,7 +51,6 @@ class ServiceProvider {
 		    setCardProfile: (index,name,cb) => req('audio/setCardProfile/'+index+'/'+name,cb),
 		    updateClientProperties: (props,mode,cb) => req('audio/updateClientProperties/'+JSON.stringify(props)+'/'+mode,cb),
 		    removeClientProperties: (props,mode,cb) => req('audio/updateClientProperties/'+props.join(','),cb),
-		    subscribe: (events,cb) => req('audio/subscribe/'+(Array.isArray(events) ? events.join(',') : events),cb),
 		    pactl: (commands,cb) => req('audio/pactl?cmd='+commands,cb)
 		  },
 		  battery: { get: cb => req('battery/get',cb) },

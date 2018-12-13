@@ -15,12 +15,29 @@ class ServiceProvider {
 	}
 	async init() {
 		const pa = new PulseAudioClient();
-		const audioEvents = new EventEmitter();
 		
-		audioEvents.on('newListener',(event,cb) => pa.on(event,cb));
-		audioEvents.on('removeListener',(event,cb) => pa.off(event,cb));
-		pa.on('newListener',(event,cb) => audioEvents.on(event,cb));
-		pa.on('removeListener',(event,cb) => audioEvents.off(event,cb));
+    [
+      'none',
+      'all',
+      'sink',
+      'source',
+      'sinkInput',
+      'sourceOutput',
+      'module',
+      'client',
+      'sampleCache',
+      'global',
+      'card'
+    ].forEach(event => {
+      const cb = (...args) => {
+        console.log({
+          name: event,
+          arguments: args
+        });
+        core.broadcast('hw/audio/'+event,...args);
+      };
+      pa.on(event,cb);
+    });
 		
 		pa.on('ready',() => {
 		  pa.subscribe('all',err => {
@@ -189,40 +206,6 @@ class ServiceProvider {
 		        resolve(req.params.props);
 		      });
 		    }),'get'],
-		    ['/hardware/audio/subscribe/:events',req => new Promise((resolve,reject) => {
-		      pa.subscribe(req.parmas.events.split(','),err => {
-		        if(err) return reject(err);
-		        resolve(req.parmas.events.split(','));
-		      });
-		    }),'get'],
-		    ['/hardware/audio/events',ws => {
-		      [
-		        'none',
-		        'all',
-		        'sink',
-		        'source',
-		        'sinkInput',
-		        'sourceOutput',
-		        'module',
-		        'client',
-		        'sampleCache',
-		        'global',
-		        'card'
-		      ].forEach(event => {
-		        const cb = (...args) => {
-		          console.log({
-		            name: event,
-		            arguments: args
-		          });
-		          ws.send(JSON.stringify({
-		            name: event,
-		            arguments: args
-		          }));
-		        };
-		        pa.on(event,cb);
-		        ws.on('close',() => pa.off(event,cb));
-		      });
-		    },'ws'],
 		    ['/hardware/audio/pactl',req => new Promise((resolve,reject) => {
 		      let output = child_process.execSync('pactl '+req.query.cmd).toString();
 		      let lines = output.split('\n');
@@ -436,12 +419,6 @@ class ServiceProvider {
             pa.removeClientProperties(props,err => {
               if(err) return cb == undefined ? reject(err) : cb(err);
               cb == undefined ? resolve(props) : cb(null,props);
-            });
-          }),
-          subscribe: (events,cb) => new Promise((resolve,reject) => {
-            pa.subscribe(events,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(events) : cb(null,events);
             });
           }),
           pactl: (commands,cb) => new Promise((resolve,reject) => {
