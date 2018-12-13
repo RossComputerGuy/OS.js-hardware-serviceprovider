@@ -15,13 +15,13 @@ class ServiceProvider {
 			const isError = result => result.type == 'error';
 			if(typeof(cb) == 'function') {
 				return promise
-					.then(result => isError(result) ? cb(new Error.result.message) : cb(null,result))
+					.then(result => isError(result) ? cb(new Error.result.message) : cb(null,typeof(result.value) == 'undefined' ? result : result.value))
 					.catch(error => cb(error));
 			}
-			return promise.then(result => isError(result) ? Promise.reject(result.message) : result);
+			return promise.then(result => isError(result) ? Promise.reject(result.message) : typeof(result.value) == 'undefined' ? result : result.value);
 		};
 		const req = (name,cb) => {
-			const promise = this.core.request(this.core.url('/hardware/'+name),{},'json');
+			const promise = this.core.request(this.core.url('hardware/'+name),{},'json');
 			return callbackWrapper(promise,cb);
 		};
 		const audioEvents = new EventEmitter();
@@ -37,12 +37,12 @@ class ServiceProvider {
 		    getSinkInputByIndex: (index,cb) => req('audio/getSinkInputByIndex/'+index,cb),
 		    getSources: cb => req('audio/getSources',cb),
 		    getSourceOutputByIndex: (index,cb) => req('audio/getSourceOutputByIndex/'+index,cb),
-		    setSinkVolumes: (index,vol,cb) => req('audio/setSinkVolumes/'+index+'/'+vol.join(','),cb),
-		    setSourceVolumes: (index,vol,cb) => req('audio/setSourceVolumes/'+index+'/'+vol.join(','),cb),
-		    setSinkMute: (index,enable,cb) => req('audio/setSinkMute/'+index+'/'+enable ? 'true' : 'false',cb),
-		    setSourceMute: (index,enable,cb) => req('audio/setSourceMute/'+index+'/'+enable ? 'true' : 'false',cb),
-		    setSinkSuspend: (index,enable,cb) => req('audio/setSinkSuspend/'+index+'/'+enable ? 'true' : 'false',cb),
-		    setSourceSuspend: (index,enable,cb) => req('audio/setSourceSuspend/'+index+'/'+enable ? 'true' : 'false',cb),
+		    setSinkVolumes: (index,vol,cb) => req('audio/setSinkVolumes/'+index+'?value='+vol,cb),
+		    setSourceVolumes: (index,vol,cb) => req('audio/setSourceVolumes/'+index+'?value='+vol,cb),
+		    setSinkMute: (index,enable,cb) => req('audio/setSinkMute/'+index+'/'+(enable ? 'true' : 'false'),cb),
+		    setSourceMute: (index,enable,cb) => req('audio/setSourceMute/'+index+'/'+(enable ? 'true' : 'false'),cb),
+		    setSinkSuspend: (index,enable,cb) => req('audio/setSinkSuspend/'+index+'/'+(enable ? 'true' : 'false'),cb),
+		    setSourceSuspend: (index,enable,cb) => req('audio/setSourceSuspend/'+index+'/'+(enable ? 'true' : 'false'),cb),
 		    setDefaultSinkByName: (name,cb) => req('audio/setDefaultSinkByName/'+name,cb),
 		    setDefaultSourceByName: (name,cb) => req('audio/setDefaultSourceByName/'+name,cb),
 		    killClientByIndex: (index,cb) => req('audio/killClientByIndex/'+index,cb),
@@ -55,7 +55,8 @@ class ServiceProvider {
 		    setCardProfile: (index,name,cb) => req('audio/setCardProfile/'+index+'/'+name,cb),
 		    updateClientProperties: (props,mode,cb) => req('audio/updateClientProperties/'+JSON.stringify(props)+'/'+mode,cb),
 		    removeClientProperties: (props,mode,cb) => req('audio/updateClientProperties/'+props.join(','),cb),
-		    subscribe: (events,cb) => req('audio/subscribe/'+(Array.isArray(events) ? events.join(',') : events),cb)
+		    subscribe: (events,cb) => req('audio/subscribe/'+(Array.isArray(events) ? events.join(',') : events),cb),
+		    pactl: (commands,cb) => req('audio/pactl?cmd='+commands,cb)
 		  },
 		  battery: { get: cb => req('battery/get',cb) },
 		  cpu: {

@@ -1,3 +1,4 @@
+const child_process = require('child_process');
 const {EventEmitter} = require('@osjs/event-emitter');
 const PulseAudioClient = require('paclient');
 const si = require('systeminformation');
@@ -22,6 +23,9 @@ class ServiceProvider {
 		pa.on('removeListener',(event,cb) => audioEvents.off(event,cb));
 		
 		pa.on('ready',() => {
+		  pa.subscribe('all',err => {
+		    if(err) throw err;
+		  });
 		  [
 		    ['/hardware/audio/getCards',req => new Promise((resolve,reject) => {
 		      pa.getCards((err,sink) => {
@@ -42,9 +46,17 @@ class ServiceProvider {
 		      });
 		    }),'get'],
 		    ['/hardware/audio/getSinks',req => new Promise((resolve,reject) => {
-		      pa.getSinks((err,sink) => {
+		      pa.getSinks((err,results) => {
 		        if(err) return reject(err);
-		        resolve(sink);
+            let list = child_process.execSync('pactl list sinks').toString().split('\n');
+            for(let i = 0;i < results.length;i++) {
+              let start = list.indexOf('Sink #'+i);
+              let lines = list.slice(start,list.indexOf('',start));
+              for(let line of lines) {
+                if(line.startsWith('\tVolume: ')) results[i].volume = parseInt(line.split('/')[1].split(' ').join('').replace('%',''));
+              }
+            }
+		        resolve(results);
 		      });
 		    }),'get'],
 		    ['/hardware/audio/getSinkInputByIndex/:index',req => new Promise((resolve,reject) => {
@@ -54,9 +66,17 @@ class ServiceProvider {
 		      });
 		    }),'get'],
 		    ['/hardware/audio/getSources',req => new Promise((resolve,reject) => {
-		      pa.getSources((err,sink) => {
+		      pa.getSources((err,results) => {
 		        if(err) return reject(err);
-		        resolve(sink);
+            let list = child_process.execSync('pactl list sources').toString().split('\n');
+            for(let i = 0;i < results.length;i++) {
+              let start = list.indexOf('Source #'+i);
+              let lines = list.slice(start,list.indexOf('',start));
+              for(let line of lines) {
+                if(line.startsWith('\tVolume: ')) results[i].volume = parseInt(line.split('/')[1].split(' ').join('').replace('%',''));
+              }
+            }
+		        resolve(results);
 		      });
 		    }),'get'],
 		    ['/hardware/audio/getSourceOutputByIndex/:index',req => new Promise((resolve,reject) => {
@@ -65,74 +85,64 @@ class ServiceProvider {
 		        resolve(sink);
 		      });
 		    }),'get'],
-		    ['/hardware/audio/setSinkVolumes/:index/:volumes',req => new Promise((resolve,reject) => {
-		      req.params.volumes = req.params.volumes.split(',');
-		      for(let i = 0;i < req.params.volumes.length;i++) req.params.volumes[i] = parseInt(req.params.volumes[i]);
-		      pa.setSinkVolumes(parseInt(req.params.index),req.params.volumes,err => {
-		        if(err) return reject(err);
-		        resolve(req.params.volumes);
-		      });
+		    ['/hardware/audio/setSinkVolumes/:index',req => new Promise((resolve,reject) => {
+		      resolve(child_process.execSync('pactl set-sink-volume '+req.params.index+' '+req.query.value));
 		    }),'get'],
-		    ['/hardware/audio/setSourceVolumes/:index/:volumes',req => new Promise((resolve,reject) => {
-		      req.params.volumes = req.params.volumes.split(',');
-		      for(let i = 0;i < req.params.volumes.length;i++) req.params.volumes[i] = parseInt(req.params.volumes[i]);
-		      pa.setSourceVolumes(parseInt(req.params.index),req.params.volumes,err => {
-		        if(err) return reject(err);
-		        resolve(req.params.volumes);
-		      });
+		    ['/hardware/audio/setSourceVolumes/:index',req => new Promise((resolve,reject) => {
+		      resolve(child_process.execSync('pactl set-source-volume '+req.params.index+' '+req.query.value));
 		    }),'get'],
 		    ['/hardware/audio/setSinkMute/:index/:enable',req => new Promise((resolve,reject) => {
 		      pa.setSinkMute(parseInt(req.params.index),req.params.enable == 'true',err => {
 		        if(err) return reject(err);
-		        resolve(req.params.enable == 'true');
+		        resolve({ value: req.params.enable == 'true' });
 		      });
 		    }),'get'],
 		    ['/hardware/audio/setSourceMute/:index/:enable',req => new Promise((resolve,reject) => {
 		      pa.setSinkMute(parseInt(req.params.index),req.params.enable == 'true',err => {
 		        if(err) return reject(err);
-		        resolve(req.params.enable == 'true');
+		        resolve({ value: req.params.enable == 'true' });
 		      });
 		    }),'get'],
 		    ['/hardware/audio/setSinkSuspend/:index/:enable',req => new Promise((resolve,reject) => {
 		      pa.setSinkSuspend(parseInt(req.params.index),req.params.enable == 'true',err => {
 		        if(err) return reject(err);
-		        resolve(req.params.enable == 'true');
+		        resolve({ value: req.params.enable == 'true' });
 		      });
 		    }),'get'],
 		    ['/hardware/audio/setSourceSuspend/:index/:enable',req => new Promise((resolve,reject) => {
 		      pa.setSourceSuspend(parseInt(req.params.index),req.params.enable == 'true',err => {
 		        if(err) return reject(err);
-		        resolve(req.params.enable == 'true');
+		        resolve({ value: req.params.enable == 'true' });
 		      });
 		    }),'get'],
 		    ['/hardware/audio/setDefaultSinkByName/:name',req => new Promise((resolve,reject) => {
 		      pa.setDefaultSinkByName(req.params.name,err => {
 		        if(err) return reject(err);
-		        resolve(req.params.name);
+		        resolve({ value: req.params.name });
 		      });
 		    }),'get'],
 		    ['/hardware/audio/setDefaultSourceByName/:name',req => new Promise((resolve,reject) => {
 		      pa.setDefaultSourceByName(req.params.name,err => {
 		        if(err) return reject(err);
-		        resolve(req.params.name);
+		        resolve({ value: req.params.name });
 		      });
 		    }),'get'],
 		    ['/hardware/audio/killClientByIndex/:index',req => new Promise((resolve,reject) => {
 		      pa.setSinkSuspend(parseInt(req.params.index),err => {
 		        if(err) return reject(err);
-		        resolve(parseInt(req.params.index));
+		        resolve({ value: parseInt(req.params.index) });
 		      });
 		    }),'get'],
 		    ['/hardware/audio/killSinkInputByIndex/:index',req => new Promise((resolve,reject) => {
 		      pa.killSinkInputByIndex(parseInt(req.params.index),err => {
 		        if(err) return reject(err);
-		        resolve(parseInt(req.params.index));
+		        resolve({ value: parseInt(req.params.index) });
 		      });
 		    }),'get'],
 		    ['/hardware/audio/killSourceOutputByIndex/:index',req => new Promise((resolve,reject) => {
 		      pa.killSourceOutputByIndex(parseInt(req.params.index),err => {
 		        if(err) return reject(err);
-		        resolve(parseInt(req.params.index));
+		        resolve({ value: parseInt(req.params.index) });
 		      });
 		    }),'get'],
 		    ['/hardware/audio/moveSinkInput/:index/:dest',req => new Promise((resolve,reject) => {
@@ -150,19 +160,19 @@ class ServiceProvider {
 		    ['/hardware/audio/setSinkPort/:index/:name',req => new Promise((resolve,reject) => {
 		      pa.setSinkPort(parseInt(req.params.index),req.params.name,err => {
 		        if(err) return reject(err);
-		        resolve(req.params.name);
+		        resolve({ value: req.params.name });
 		      });
 		    }),'get'],
 		    ['/hardware/audio/setSourcePort/:index/:name',req => new Promise((resolve,reject) => {
 		      pa.setSourcePort(parseInt(req.params.index),req.params.name,err => {
 		        if(err) return reject(err);
-		        resolve(req.params.name);
+		        resolve({ value: req.params.name });
 		      });
 		    }),'get'],
 		    ['/hardware/audio/setCardProfile/:index/:name',req => new Promise((resolve,reject) => {
 		      pa.setCardProfile(parseInt(req.params.index),req.params.name,err => {
 		        if(err) return reject(err);
-		        resolve(req.params.name);
+		        resolve({ value: req.params.name });
 		      });
 		    }),'get'],
 		    ['/hardware/audio/updateClientProperties/:props/:mode',req => new Promise((resolve,reject) => {
@@ -200,6 +210,10 @@ class ServiceProvider {
 		        'card'
 		      ].forEach(event => {
 		        const cb = (...args) => {
+		          console.log({
+		            name: event,
+		            arguments: args
+		          });
 		          ws.send(JSON.stringify({
 		            name: event,
 		            arguments: args
@@ -209,6 +223,11 @@ class ServiceProvider {
 		        ws.on('close',() => pa.off(event,cb));
 		      });
 		    },'ws'],
+		    ['/hardware/audio/pactl',req => new Promise((resolve,reject) => {
+		      let output = child_process.execSync('pactl '+req.query.cmd).toString();
+		      let lines = output.split('\n');
+		      resolve({ output, lines });
+		    }),'get'],
 		  
 			  ['/hardware/battery/get',req => si.battery(),'get'],
 			  
@@ -274,6 +293,14 @@ class ServiceProvider {
           getSinks: cb => new Promise((resolve,reject) => {
             pa.getSinks((err,results) => {
               if(err) return cb == undefined ? reject(err) : cb(err);
+              let list = child_process.execSync('pactl list sinks').toString().split('\n');
+              for(let i = 0;i < results.length;i++) {
+                let start = list.indexOf('Sink #'+i);
+                let lines = list.slice(start,list.indexOf('',start));
+                for(let line of lines) {
+                  if(line.startsWith('\tVolume: ')) results[i].volume = parseInt(line.split('/')[1].split(' ').join('').replace('%',''));
+                }
+              }
               cb == undefined ? resolve(results) : cb(null,results);
             });
           }),
@@ -286,6 +313,14 @@ class ServiceProvider {
           getSources: cb => new Promise((resolve,reject) => {
             pa.getSources((err,results) => {
               if(err) return cb == undefined ? reject(err) : cb(err);
+              let list = child_process.execSync('pactl list sources').toString().split('\n');
+              for(let i = 0;i < results.length;i++) {
+                let start = list.indexOf('Source #'+i);
+                let lines = list.slice(start,list.indexOf('',start));
+                for(let line of lines) {
+                  if(line.startsWith('\tVolume: ')) results[i].volume = parseInt(line.split('/')[1].split(' ').join('').replace('%',''));
+                }
+              }
               cb == undefined ? resolve(results) : cb(null,results);
             });
           }),
@@ -408,6 +443,11 @@ class ServiceProvider {
               if(err) return cb == undefined ? reject(err) : cb(err);
               cb == undefined ? resolve(events) : cb(null,events);
             });
+          }),
+          pactl: (commands,cb) => new Promise((resolve,reject) => {
+		        let output = child_process.execSync('pactl '+req.query.cmd).toString();
+		        let lines = output.split('\n');
+            cb == undefined ? resolve({ output, lines }) : cb(null,{ output, lines });
           })
 		    },
 			  battery: { get: si.battery },
