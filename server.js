@@ -38,6 +38,65 @@ class ServiceProvider {
       };
       pa.on(event,cb);
     });
+    
+    [
+      ['/hardware/battery/get',req => si.battery(),'get'],
+
+      ['/hardware/cpu/get',req => si.cpu(),'get'],
+      ['/hardware/cpu/flags',req => si.cpuFlags(),'get'],
+      ['/hardware/cpu/speed',req => si.cpuCurrentspeed(),'get'],
+      ['/hardware/cpu/temp',req => si.cpuTemperature(),'get'],
+
+      ['/hardware/graphics/get',req => si.graphics(),'get'],
+
+      ['/hardware/net/connections',req => si.networkConnections(),'get'],
+      ['/hardware/net/interfaces',req => si.networkInterfaces(),'get'],
+      ['/hardware/net/getDefaultInterfaceName',req => si.networkInterfaceDefault(),'get'],
+      ['/hardware/net/stats/:iface',req => si.networkStats(req.params.iface),'get'],
+
+      ['/hardware/mem/get',req => si.mem(),'get'],
+      ['/hardware/mem/layout',req => si.memLayout(),'get'],
+
+      ['/hardware/storage/devices',req => si.blockDevices(),'get'],
+      ['/hardware/storage/fs',req => si.fsSize(),'get'],
+      ['/hardware/storage/layout',req => si.diskLayout(),'get'],
+      ['/hardware/storage/io',req => si.disksIO(),'get'],
+      ['/hardware/storage/stat',req => si.fsStats(),'get'],
+
+      ['/hardware/sys/get',req => si.system(),'get'],
+      ['/hardware/sys/bios',req => si.bios(),'get'],
+      ['/hardware/sys/baseboard',req => si.baseboard(),'get']
+    ].forEach(([endpoint,fn,method]) => {
+      this.core.app[method](endpoint,(req,res) => {
+        if(method == 'ws') {
+          fn(req,res);
+         } else {
+          fn(req).then(data => {
+            res.json(data);
+          }).catch(err => {
+            res.json({ type: 'error', stack: err.stack, name: err.name, message: err.message });
+          });
+        }
+      });
+    });
+    
+    let audio = {};
+    
+    this.core.singleton('hw',() => ({
+      audio,
+      battery: { get: si.battery },
+      cpu: { get: si.cpu, flags: si.cpuFlags, speed: si.cpuCurrentspeed, temp: si.cpuTemperature },
+      graphics: { get: si.graphics },
+      net: {
+        connections: si.networkConnections,
+        interfaces: si.networkInterfaces,
+        getDefaultInterfaceName: si.networkInterfaceDefault,
+        stats: si.networkStats
+      },
+      mem: { get: si.mem, layout: si.memLayout },
+      storage: { devices: si.blockDevices, fs: si.fsSize, layout: si.diskLayout, io: si.disksIO, stat: si.fsStats },
+      sys: { get: si.system, bios: si.bios, baseboard: si.baseboard }
+    }));
 		
 		pa.on('ready',() => {
 		  pa.subscribe('all',err => {
@@ -210,34 +269,7 @@ class ServiceProvider {
 		      let output = child_process.execSync('pactl '+req.query.cmd).toString();
 		      let lines = output.split('\n');
 		      resolve({ output, lines });
-		    }),'get'],
-		  
-			  ['/hardware/battery/get',req => si.battery(),'get'],
-			  
-			  ['/hardware/cpu/get',req => si.cpu(),'get'],
-			  ['/hardware/cpu/flags',req => si.cpuFlags(),'get'],
-			  ['/hardware/cpu/speed',req => si.cpuCurrentspeed(),'get'],
-			  ['/hardware/cpu/temp',req => si.cpuTemperature(),'get'],
-			  
-			  ['/hardware/graphics/get',req => si.graphics(),'get'],
-			  
-			  ['/hardware/net/connections',req => si.networkConnections(),'get'],
-			  ['/hardware/net/interfaces',req => si.networkInterfaces(),'get'],
-			  ['/hardware/net/getDefaultInterfaceName',req => si.networkInterfaceDefault(),'get'],
-			  ['/hardware/net/stats/:iface',req => si.networkStats(req.params.iface),'get'],
-			  
-			  ['/hardware/mem/get',req => si.mem(),'get'],
-			  ['/hardware/mem/layout',req => si.memLayout(),'get'],
-			  
-			  ['/hardware/storage/devices',req => si.blockDevices(),'get'],
-			  ['/hardware/storage/fs',req => si.fsSize(),'get'],
-			  ['/hardware/storage/layout',req => si.diskLayout(),'get'],
-			  ['/hardware/storage/io',req => si.disksIO(),'get'],
-			  ['/hardware/storage/stat',req => si.fsStats(),'get'],
-			  
-			  ['/hardware/sys/get',req => si.system(),'get'],
-			  ['/hardware/sys/bios',req => si.bios(),'get'],
-			  ['/hardware/sys/baseboard',req => si.baseboard(),'get']
+		    }),'get']
       ].forEach(([endpoint,fn,method]) => {
         this.core.app[method](endpoint,(req,res) => {
           if(method == 'ws') {
@@ -252,194 +284,180 @@ class ServiceProvider {
         });
 		  });
 		  
-      this.core.singleton('hw',() => ({
-		    audio: {
-		      events: audioEvents,
-          getCards: cb => new Promise((resolve,reject) => {
-            pa.getCards((err,results) => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(results) : cb(null,results);
-            });
-          }),
-          getClients: cb => new Promise((resolve,reject) => {
-            pa.getClients((err,results) => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(results) : cb(null,results);
-            });
-          }),
-          getModules: cb => new Promise((resolve,reject) => {
-            pa.getModules((err,results) => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(results) : cb(null,results);
-            });
-          }),
-          getSinks: cb => new Promise((resolve,reject) => {
-            pa.getSinks((err,results) => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              let list = child_process.execSync('pactl list sinks').toString().split('\n');
-              for(let i = 0;i < results.length;i++) {
-                let start = list.indexOf('Sink #'+i);
-                let lines = list.slice(start,list.indexOf('',start));
-                for(let line of lines) {
-                  if(line.startsWith('\tVolume: ')) results[i].volume = parseInt(line.split('/')[1].split(' ').join('').replace('%',''));
-                }
+      audio = {
+		    events: audioEvents,
+        getCards: cb => new Promise((resolve,reject) => {
+          pa.getCards((err,results) => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(results) : cb(null,results);
+          });
+        }),
+        getClients: cb => new Promise((resolve,reject) => {
+          pa.getClients((err,results) => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(results) : cb(null,results);
+          });
+        }),
+        getModules: cb => new Promise((resolve,reject) => {
+          pa.getModules((err,results) => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(results) : cb(null,results);
+          });
+        }),
+        getSinks: cb => new Promise((resolve,reject) => {
+          pa.getSinks((err,results) => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            let list = child_process.execSync('pactl list sinks').toString().split('\n');
+            for(let i = 0;i < results.length;i++) {
+              let start = list.indexOf('Sink #'+i);
+              let lines = list.slice(start,list.indexOf('',start));
+              for(let line of lines) {
+                if(line.startsWith('\tVolume: ')) results[i].volume = parseInt(line.split('/')[1].split(' ').join('').replace('%',''));
               }
-              cb == undefined ? resolve(results) : cb(null,results);
-            });
-          }),
-          getSinkInputByIndex: (index,cb) => new Promise((resolve,reject) => {
-            pa.getSinkInputByIndex(index,(err,results) => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(results) : cb(null,results);
-            });
-          }),
-          getSources: cb => new Promise((resolve,reject) => {
-            pa.getSources((err,results) => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              let list = child_process.execSync('pactl list sources').toString().split('\n');
-              for(let i = 0;i < results.length;i++) {
-                let start = list.indexOf('Source #'+i);
-                let lines = list.slice(start,list.indexOf('',start));
-                for(let line of lines) {
-                  if(line.startsWith('\tVolume: ')) results[i].volume = parseInt(line.split('/')[1].split(' ').join('').replace('%',''));
-                }
+            }
+            cb == undefined ? resolve(results) : cb(null,results);
+          });
+        }),
+        getSinkInputByIndex: (index,cb) => new Promise((resolve,reject) => {
+          pa.getSinkInputByIndex(index,(err,results) => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(results) : cb(null,results);
+          });
+        }),
+        getSources: cb => new Promise((resolve,reject) => {
+          pa.getSources((err,results) => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            let list = child_process.execSync('pactl list sources').toString().split('\n');
+            for(let i = 0;i < results.length;i++) {
+              let start = list.indexOf('Source #'+i);
+              let lines = list.slice(start,list.indexOf('',start));
+              for(let line of lines) {
+                if(line.startsWith('\tVolume: ')) results[i].volume = parseInt(line.split('/')[1].split(' ').join('').replace('%',''));
               }
-              cb == undefined ? resolve(results) : cb(null,results);
-            });
-          }),
-          getSourceOutputByIndex: (index,cb) => new Promise((resolve,reject) => {
-            pa.getSourceOutputByIndex(index,(err,results) => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(results) : cb(null,results);
-            });
-          }),
-          setSinkVolumes: (index,volumes,cb) => new Promise((resolve,reject) => {
-            pa.setSinkVolumes(index,volumes,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(volumes) : cb(null,volumes);
-            });
-          }),
-          setSourceVolumes: (index,volumes,cb) => new Promise((resolve,reject) => {
-            pa.setSourceVolumes(index,volumes,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(volumes) : cb(null,volumes);
-            });
-          }),
-          setSinkMute: (index,enable,cb) => new Promise((resolve,reject) => {
-            pa.setSinkMute(index,enable,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(enable) : cb(null,enable);
-            });
-          }),
-          setSourceMute: (index,enable,cb) => new Promise((resolve,reject) => {
-            pa.setSourceMute(index,enable,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(enable) : cb(null,enable);
-            });
-          }),
-          setSinkSuspend: (index,enable,cb) => new Promise((resolve,reject) => {
-            pa.setSinkSuspend(index,enable,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(enable) : cb(null,enable);
-            });
-          }),
-          setSourceSuspend: (index,enable,cb) => new Promise((resolve,reject) => {
-            pa.setSourceSuspend(index,enable,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(enable) : cb(null,enable);
-            });
-          }),
-          setDefaultSinkByName: (name,cb) => new Promise((resolve,reject) => {
-            pa.setDefaultSinkByName(name,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(name) : cb(null,enable);
-            });
-          }),
-          setDefaultSourceByName: (name,cb) => new Promise((resolve,reject) => {
-            pa.setDefaultSourceByName(name,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(name) : cb(null,name);
-            });
-          }),
-          killClientByIndex: (index,cb) => new Promise((resolve,reject) => {
-            pa.killClientByIndex(index,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(index) : cb(null,index);
-            });
-          }),
-          killSinkInputByIndex: (index,cb) => new Promise((resolve,reject) => {
-            pa.killSinkInputByIndex(index,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(index) : cb(null,index);
-            });
-          }),
-          killSourceOutputByIndex: (index,cb) => new Promise((resolve,reject) => {
-            pa.killSourceOutputByIndex(index,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(index) : cb(null,index);
-            });
-          }),
-          moveSinkInput: (index,dest,cb) => new Promise((resolve,reject) => {
-            pa.moveSinkInput(index,dest,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve({ index, dest }) : cb(null,{ index, dest });
-            });
-          }),
-          moveSourceOutput: (index,dest,cb) => new Promise((resolve,reject) => {
-            pa.moveSourceOutput(index,dest,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve({ index, dest }) : cb(null,{ index, dest });
-            });
-          }),
-          setSinkPort: (index,name,cb) => new Promise((resolve,reject) => {
-            pa.setSinkPort(index,name,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(name) : cb(null,name);
-            });
-          }),
-          setSourcePort: (index,name,cb) => new Promise((resolve,reject) => {
-            pa.setSourcePort(index,name,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(name) : cb(null,name);
-            });
-          }),
-          setCardProfile: (index,name,cb) => new Promise((resolve,reject) => {
-            pa.setCardProfile(index,name,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(name) : cb(null,name);
-            });
-          }),
-          updateClientProperties: (props,mode,cb) => new Promise((resolve,reject) => {
-            pa.updateClientProperties(props,mode,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(props) : cb(null,props);
-            });
-          }),
-          removeClientProperties: (props,cb) => new Promise((resolve,reject) => {
-            pa.removeClientProperties(props,err => {
-              if(err) return cb == undefined ? reject(err) : cb(err);
-              cb == undefined ? resolve(props) : cb(null,props);
-            });
-          }),
-          pactl: (commands,cb) => new Promise((resolve,reject) => {
-		        let output = child_process.execSync('pactl '+req.query.cmd).toString();
-		        let lines = output.split('\n');
-            cb == undefined ? resolve({ output, lines }) : cb(null,{ output, lines });
-          })
-		    },
-			  battery: { get: si.battery },
-			  cpu: { get: si.cpu, flags: si.cpuFlags, speed: si.cpuCurrentspeed, temp: si.cpuTemperature },
-			  graphics: { get: si.graphics },
-			  net: {
-			   connections: si.networkConnections,
-			   interfaces: si.networkInterfaces,
-			   getDefaultInterfaceName: si.networkInterfaceDefault,
-			   stats: si.networkStats
-			  },
-			  mem: { get: si.mem, layout: si.memLayout },
-			  storage: { devices: si.blockDevices, fs: si.fsSize, layout: si.diskLayout, io: si.disksIO, stat: si.fsStats },
-			  sys: { get: si.system, bios: si.bios, baseboard: si.baseboard }
-		  }));
+            }
+            cb == undefined ? resolve(results) : cb(null,results);
+          });
+        }),
+        getSourceOutputByIndex: (index,cb) => new Promise((resolve,reject) => {
+          pa.getSourceOutputByIndex(index,(err,results) => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(results) : cb(null,results);
+          });
+        }),
+        setSinkVolumes: (index,volumes,cb) => new Promise((resolve,reject) => {
+          pa.setSinkVolumes(index,volumes,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(volumes) : cb(null,volumes);
+          });
+        }),
+        setSourceVolumes: (index,volumes,cb) => new Promise((resolve,reject) => {
+          pa.setSourceVolumes(index,volumes,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(volumes) : cb(null,volumes);
+          });
+        }),
+        setSinkMute: (index,enable,cb) => new Promise((resolve,reject) => {
+          pa.setSinkMute(index,enable,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(enable) : cb(null,enable);
+          });
+        }),
+        setSourceMute: (index,enable,cb) => new Promise((resolve,reject) => {
+          pa.setSourceMute(index,enable,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(enable) : cb(null,enable);
+          });
+        }),
+        setSinkSuspend: (index,enable,cb) => new Promise((resolve,reject) => {
+          pa.setSinkSuspend(index,enable,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(enable) : cb(null,enable);
+          });
+        }),
+        setSourceSuspend: (index,enable,cb) => new Promise((resolve,reject) => {
+          pa.setSourceSuspend(index,enable,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(enable) : cb(null,enable);
+          });
+        }),
+        setDefaultSinkByName: (name,cb) => new Promise((resolve,reject) => {
+          pa.setDefaultSinkByName(name,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(name) : cb(null,enable);
+          });
+        }),
+        setDefaultSourceByName: (name,cb) => new Promise((resolve,reject) => {
+          pa.setDefaultSourceByName(name,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(name) : cb(null,name);
+          });
+        }),
+        killClientByIndex: (index,cb) => new Promise((resolve,reject) => {
+          pa.killClientByIndex(index,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(index) : cb(null,index);
+          });
+        }),
+        killSinkInputByIndex: (index,cb) => new Promise((resolve,reject) => {
+          pa.killSinkInputByIndex(index,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(index) : cb(null,index);
+          });
+        }),
+        killSourceOutputByIndex: (index,cb) => new Promise((resolve,reject) => {
+          pa.killSourceOutputByIndex(index,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(index) : cb(null,index);
+          });
+        }),
+        moveSinkInput: (index,dest,cb) => new Promise((resolve,reject) => {
+          pa.moveSinkInput(index,dest,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve({ index, dest }) : cb(null,{ index, dest });
+          });
+        }),
+        moveSourceOutput: (index,dest,cb) => new Promise((resolve,reject) => {
+          pa.moveSourceOutput(index,dest,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve({ index, dest }) : cb(null,{ index, dest });
+          });
+        }),
+        setSinkPort: (index,name,cb) => new Promise((resolve,reject) => {
+          pa.setSinkPort(index,name,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(name) : cb(null,name);
+          });
+        }),
+        setSourcePort: (index,name,cb) => new Promise((resolve,reject) => {
+          pa.setSourcePort(index,name,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(name) : cb(null,name);
+          });
+        }),
+        setCardProfile: (index,name,cb) => new Promise((resolve,reject) => {
+          pa.setCardProfile(index,name,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(name) : cb(null,name);
+          });
+        }),
+        updateClientProperties: (props,mode,cb) => new Promise((resolve,reject) => {
+          pa.updateClientProperties(props,mode,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(props) : cb(null,props);
+          });
+        }),
+        removeClientProperties: (props,cb) => new Promise((resolve,reject) => {
+          pa.removeClientProperties(props,err => {
+            if(err) return cb == undefined ? reject(err) : cb(err);
+            cb == undefined ? resolve(props) : cb(null,props);
+          });
+        }),
+        pactl: (commands,cb) => new Promise((resolve,reject) => {
+		      let output = child_process.execSync('pactl '+req.query.cmd).toString();
+		      let lines = output.split('\n');
+          cb == undefined ? resolve({ output, lines }) : cb(null,{ output, lines });
+        })
+      };
 		});
 		pa.connect();
 	}
