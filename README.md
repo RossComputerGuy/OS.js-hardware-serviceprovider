@@ -1,6 +1,6 @@
 # OS.js Hardware Service Provider
 
-A service provider that adds hardware acces.
+A service provider that adds hardware access.
 
 # Install
 
